@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: grease-trappers-api
+    runtime: node
+    plan: starter
+    buildCommand: cd .. && npm install --ignore-scripts && cd api && npm install --legacy-peer-deps
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: grease-trappers-db
+          property: connectionString
+    healthCheckPath: /api/health
