@@ -25,6 +25,7 @@ const invoicesRoutes = require('./src/routes/invoices');
 const dashboardRoutes = require('./src/routes/dashboard');
 const quoteRequestsRoutes = require('./src/routes/quoteRequests');
 const contractsRoutes = require('./src/routes/contracts');
+const setupRoutes = require('./src/routes/setup');
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/api/locations', locationsRoutes);
 app.use('/api/invoices', invoicesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contracts', contractsRoutes);
+app.use('/api/setup', setupRoutes);
 
 // 404
 app.use('/api', (req, res) => {
