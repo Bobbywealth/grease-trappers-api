@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool, DEMO_MODE } = require('../config/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { sendSms, isStubMode: smsStub } = require('../services/sms');
 
 router.use(authenticate);
 
@@ -201,35 +202,59 @@ router.post('/campaigns/:id/send', requireRole('admin', 'manager'), async (req, 
       return res.status(400).json({ message: 'No customers match the audience filter' });
     }
 
-    // Personalize + insert messages
+    // Personalize + send via Twilio (when configured)
     let sent = 0;
+    let delivered = 0;
+    let failed = 0;
     for (const cust of customers) {
       let personalized = campaign.body
         .replace(/\{business_name\}/g, cust.business_name || 'there')
         .replace(/\{contact_name\}/g, cust.contact_name || 'there');
+      let status = 'sent';
+      let providerId = null;
+      let errorMsg = null;
+      try {
+        const result = await sendSms({ to: cust.phone, body: personalized });
+        if (result.stub) {
+          status = 'sent';
+          providerId = null;
+        } else {
+          status = 'sent';
+          providerId = result.providerId;
+          delivered++;
+        }
+      } catch (e) {
+        status = 'failed';
+        failed++;
+        errorMsg = e.message;
+        console.error(`SMS to ${cust.phone} failed:`, e.message);
+      }
       await client.query(
-        `INSERT INTO sms_messages (campaign_id, customer_id, to_phone, body, status, sent_at)
-         VALUES ($1, $2, $3, $4, 'sent', NOW())`,
-        [campaign.id, cust.id, cust.phone, personalized]
+        `INSERT INTO sms_messages (campaign_id, customer_id, to_phone, body, status, provider_id, error, sent_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [campaign.id, cust.id, cust.phone, personalized, status, providerId, errorMsg]
       );
       sent++;
     }
 
     await client.query(
       `UPDATE sms_campaigns
-       SET status = 'sent', sent_at = NOW(), recipient_count = $2, sent_count = $2, delivered_count = $2
+       SET status = 'sent', sent_at = NOW(),
+           recipient_count = $2, sent_count = $2,
+           delivered_count = $3, failed_count = $4
        WHERE id = $1`,
-      [campaign.id, sent]
+      [campaign.id, sent, delivered, failed]
     );
 
     await client.query('COMMIT');
 
-    // TODO: real Twilio integration goes here. For now, SMS is recorded in
-    // the DB so the UI can show the campaign flow end-to-end.
-    // const twilio = require('twilio')(SID, TOKEN);
-    // for each message: twilio.messages.create({ from, to, body })
-
-    res.json({ sent, total: customers.length });
+    res.json({
+      sent,
+      delivered,
+      failed,
+      total: customers.length,
+      stub: smsStub(),
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('send campaign:', err);

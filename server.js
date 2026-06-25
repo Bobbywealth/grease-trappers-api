@@ -27,6 +27,10 @@ const quoteRequestsRoutes = require('./src/routes/quoteRequests');
 const contractsRoutes = require('./src/routes/contracts');
 const setupRoutes = require('./src/routes/setup');
 const marketingRoutes = require('./src/routes/marketing');
+const searchRoutes = require('./src/routes/search');
+const smsRoutes = require('./src/routes/sms');
+const emailRoutes = require('./src/routes/email');
+const forgotRoutes = require('./src/routes/forgot');
 
 const app = express();
 
@@ -68,6 +72,10 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contracts', contractsRoutes);
 app.use('/api/setup', setupRoutes);
 app.use('/api/marketing', marketingRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/sms', smsRoutes);
+app.use('/api/email', emailRoutes);
+app.use('/api/auth/forgot', forgotRoutes);
 
 // 404
 app.use('/api', (req, res) => {
