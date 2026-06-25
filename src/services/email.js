@@ -7,8 +7,6 @@
 // In stub mode, returns ok:true with stub:true. The reset link is logged
 // to the API console so admins can grab it for the user manually.
 
-import { log } from 'console';
-
 let resendClient = null;
 
 function getClient() {
