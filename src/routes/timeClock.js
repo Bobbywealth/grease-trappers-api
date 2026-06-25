@@ -1,10 +1,10 @@
 /**
  * src/routes/timeClock.js — Employee clock in/out with GPS
  */
-
 const express = require('express');
 const { pool, DEMO_MODE } = require('../config/db');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { reverseGeocode } = require('../utils/geocode');
 
 const router = express.Router();
 router.use(authenticate);
@@ -33,7 +33,7 @@ router.get('/', requireRole('admin', 'manager'), async (req, res) => {
     const params = [];
     if (user_id) { params.push(parseInt(user_id, 10)); conditions.push(`user_id = $${params.length}`); }
     if (since) { params.push(since); conditions.push(`clock_in_at >= $${params.length}`); }
-    if (open_only === 'true') conditions.push('clock_out_at IS NULL');
+    if (open_only === 'true') conditions.push(`clock_out_at IS NULL`);
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const r = await pool.query(
       `SELECT tc.*, u.name as user_name, u.role as user_role
@@ -52,7 +52,12 @@ router.get('/', requireRole('admin', 'manager'), async (req, res) => {
 router.post('/clock-in', async (req, res) => {
   if (DEMO_MODE) return res.json({ id: 1, user_id: req.user.id, ...req.body });
   try {
-    const { lat, lng, address } = req.body;
+    const { lat, lng } = req.body;
+    // Reverse geocode if no address provided
+    let address = req.body.address;
+    if (!address && lat != null && lng != null) {
+      address = await reverseGeocode(lat, lng);
+    }
     // Check no existing open shift
     const existing = await pool.query(
       'SELECT id FROM time_clock WHERE user_id = $1 AND clock_out_at IS NULL',
@@ -67,7 +72,7 @@ router.post('/clock-in', async (req, res) => {
     );
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details) VALUES ($1, $2, $3)',
-      [req.user.id, 'clock_in', JSON.stringify({ lat, lng })]
+      [req.user.id, 'clock_in', JSON.stringify({ lat, lng, address })]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -80,7 +85,12 @@ router.post('/clock-in', async (req, res) => {
 router.post('/clock-out', async (req, res) => {
   if (DEMO_MODE) return res.json({ id: 1, user_id: req.user.id, ...req.body });
   try {
-    const { lat, lng, address, notes } = req.body;
+    const { lat, lng } = req.body;
+    let address = req.body.address;
+    if (!address && lat != null && lng != null) {
+      address = await reverseGeocode(lat, lng);
+    }
+    const notes = req.body.notes;
     const open = await pool.query(
       'SELECT id, clock_in_at FROM time_clock WHERE user_id = $1 AND clock_out_at IS NULL ORDER BY clock_in_at DESC LIMIT 1',
       [req.user.id]
@@ -97,7 +107,7 @@ router.post('/clock-out', async (req, res) => {
     );
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details) VALUES ($1, $2, $3)',
-      [req.user.id, 'clock_out', JSON.stringify({ total_hours: totalHours })]
+      [req.user.id, 'clock_out', JSON.stringify({ total_hours: totalHours, address })]
     );
     res.json(r.rows[0]);
   } catch (err) {
