@@ -280,6 +280,59 @@ CREATE TABLE IF NOT EXISTS quote_requests (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- SMS CAMPAIGNS (marketing blasts)
+CREATE TABLE IF NOT EXISTS sms_campaigns (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  audience_type VARCHAR(50) NOT NULL,
+  -- 'all' | 'by_city' | 'by_frequency' | 'manual'
+  audience_filter JSONB,
+  -- { cities: [...], frequencies: [...], customer_ids: [...] }
+  scheduled_for TIMESTAMP WITH TIME ZONE,
+  sent_at TIMESTAMP WITH TIME ZONE,
+  status VARCHAR(30) DEFAULT 'draft',
+  -- 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed'
+  recipient_count INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,
+  delivered_count INTEGER DEFAULT 0,
+  failed_count INTEGER DEFAULT 0,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sms_campaigns_status ON sms_campaigns(status, created_at DESC);
+
+-- SMS MESSAGES (per-recipient records)
+CREATE TABLE IF NOT EXISTS sms_messages (
+  id SERIAL PRIMARY KEY,
+  campaign_id INTEGER REFERENCES sms_campaigns(id) ON DELETE CASCADE,
+  customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+  to_phone VARCHAR(50) NOT NULL,
+  body TEXT NOT NULL,
+  status VARCHAR(30) DEFAULT 'queued',
+  -- 'queued' | 'sent' | 'delivered' | 'failed'
+  provider_id VARCHAR(100),
+  -- Twilio Message SID etc.
+  error TEXT,
+  sent_at TIMESTAMP WITH TIME ZONE,
+  delivered_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sms_messages_campaign ON sms_messages(campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_sms_messages_customer ON sms_messages(customer_id, created_at DESC);
+
+-- SMS TEMPLATES (reusable message library)
+CREATE TABLE IF NOT EXISTS sms_templates (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  category VARCHAR(50),
+  -- 'reminder' | 'promo' | 'maintenance' | 'seasonal' | 'general'
+  body TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 `;
 
 async function initSchema() {
