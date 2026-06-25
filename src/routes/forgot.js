@@ -13,7 +13,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { pool, DEMO_MODE } = require('../config/db');
 const { sendEmail, isStubMode } = require('../services/email');
